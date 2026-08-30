@@ -287,30 +287,28 @@ async function handleFormSubmit(e, statusElementId) {
     const data = Object.fromEntries(formData.entries());
 
     try {
-        const response = await fetch('/api/leads', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(data)
-        });
+        // Construct the email body
+        const subject = `Website Inquiry: ${data.exam || 'General'}`;
+        const body = `Name: ${data.name}
+Phone: ${data.phone}
+Exam: ${data.exam}
 
-        const result = await response.json();
+Message:
+${data.message || 'No message provided'}`;
+
+        // Trigger native mail client
+        window.location.href = `mailto:parivartanamclasses@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+        statusEl.textContent = "Opening your email client...";
+        statusEl.className = "text-sm text-center font-bold mt-2 text-emerald-600 block";
+        form.reset();
         
-        if (result.success) {
-            statusEl.textContent = "Success! We will contact you soon.";
-            statusEl.className = "text-sm text-center font-bold mt-2 text-green-600 block";
-            form.reset();
-            
-            // If it's the download form, simulate download after a delay
-            if (data.formType === 'Syllabus Download') {
-                setTimeout(() => {
-                    alert("Downloading Syllabus...");
-                    closeModal();
-                }, 1500);
-            }
-        } else {
-            throw new Error("Submission failed");
+        // If it's the download form, simulate download after a delay
+        if (data.formType === 'Syllabus Download') {
+            setTimeout(() => {
+                alert("Downloading Syllabus...");
+                closeModal();
+            }, 1500);
         }
     } catch (error) {
         statusEl.textContent = "An error occurred. Please try again.";
