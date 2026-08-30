@@ -1,0 +1,152 @@
+@import "tailwindcss";
+
+@theme {
+  --color-warm-alabaster: #FBFBF7;
+  --color-mint-sage: #A7F3D0;
+  --color-soft-lavender: #DDD6FE;
+  --color-warm-buttercup: #FEF08A;
+  --color-deep-forest: #1C2826;
+  --color-muted-stone: #4B5563;
+  --color-forest-emerald: #047857;
+  --color-mint-green: #059669;
+  --color-hover-emerald: #065F46;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-warm-alabaster);
+    color: var(--color-muted-stone);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    overflow-x: hidden;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--color-deep-forest);
+    font-weight: 700;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.90);
+    box-shadow: 0 10px 30px rgba(4, 120, 87, 0.07);
+    border-radius: 20px;
+  }
+  
+  .glass-button {
+    background: rgba(255, 255, 255, 0.65);
+    backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.90);
+    color: var(--color-deep-forest);
+    box-shadow: 0 4px 15px rgba(4, 120, 87, 0.05);
+    border-radius: 9999px;
+    transition: all 0.3s ease;
+  }
+  
+  .glass-button:hover {
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 6px 20px rgba(4, 120, 87, 0.1);
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-forest-emerald) 0%, var(--color-mint-green) 100%);
+    color: #FFFFFF;
+    border-radius: 9999px;
+    box-shadow: 0 6px 20px rgba(4, 120, 87, 0.2);
+    transition: all 0.3s ease;
+  }
+  
+  .btn-primary:hover {
+    background: linear-gradient(135deg, var(--color-hover-emerald) 0%, var(--color-forest-emerald) 100%);
+    box-shadow: 0 8px 25px rgba(4, 120, 87, 0.3);
+    transform: translateY(-2px);
+  }
+  
+  .text-gradient {
+    background: linear-gradient(135deg, var(--color-forest-emerald) 0%, var(--color-mint-green) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* Ambient Orbs */
+.ambient-orbs-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  animation: float 20s infinite ease-in-out alternate;
+}
+
+.orb-1 {
+  width: 400px;
+  height: 400px;
+  background: var(--color-mint-sage);
+  top: -10%;
+  left: -10%;
+  opacity: 0.6;
+  filter: blur(85px);
+  animation-delay: 0s;
+}
+
+.orb-2 {
+  width: 500px;
+  height: 500px;
+  background: var(--color-soft-lavender);
+  bottom: -10%;
+  right: -10%;
+  opacity: 0.5;
+  filter: blur(95px);
+  animation-delay: -5s;
+}
+
+.orb-3 {
+  width: 300px;
+  height: 300px;
+  background: var(--color-warm-buttercup);
+  top: 40%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.45;
+  filter: blur(80px);
+  animation-delay: -10s;
+}
+
+@keyframes float {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(30px, -50px) scale(1.1); }
+  100% { transform: translate(-30px, 30px) scale(0.9); }
+}
+
+/* Swiper 3D Cube customizations */
+.swiper-slide {
+  background-position: center;
+  background-size: cover;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+/* Hide scrollbar for clean UI */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-forest-emerald);
+  border-radius: 10px;
+}
