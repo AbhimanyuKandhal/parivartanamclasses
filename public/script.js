@@ -411,15 +411,94 @@ document.getElementById('contact-form').addEventListener('submit', (e) => handle
 document.getElementById('download-form').addEventListener('submit', (e) => handleFormSubmit(e, 'download-status'));
 
 // --- 7. Live Notice Board (Google Sheets Integration) ---
+const GOOGLE_SHEET_HTML_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUVtdgTR8osX_h2Ph_0_3rmmPn6VJKT360pkj1IOn1tOKHMBPwGc_p_PaKZVIxFsaBy6GSmUGC7tg9/pubhtml/sheet?headers=false&gid=0";
 const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUVtdgTR8osX_h2Ph_0_3rmmPn6VJKT360pkj1IOn1tOKHMBPwGc_p_PaKZVIxFsaBy6GSmUGC7tg9/pub?gid=0&single=true&output=csv";
 
-// Helper to parse standard CSV line taking into account quotes
+// HTML Table Parser for Google Sheets published HTML endpoint
+function parseSheetHTML(htmlText) {
+    const trMatches = [...htmlText.matchAll(/<tr[^>]*>(.*?)<\/tr>/gs)];
+    const rows = [];
+    
+    for (let tr of trMatches) {
+        const tdMatches = [...tr[1].matchAll(/<td[^>]*>(.*?)<\/td>/gs)];
+        if (tdMatches.length > 0) {
+            const row = tdMatches.map(td => {
+                let cellHtml = td[1];
+                let anchorMatch = cellHtml.match(/<a[^>]*href=["']([^"']+)["'][^>]*>/i);
+                let linkUrl = '';
+                if (anchorMatch) {
+                    let rawHref = anchorMatch[1];
+                    let qMatch = rawHref.match(/[?&]q=([^&]+)/);
+                    linkUrl = qMatch ? decodeURIComponent(qMatch[1]) : rawHref;
+                }
+                let text = cellHtml
+                    .replace(/<br\s*[\/]?>/gi, '\n')
+                    .replace(/<[^>]+>/g, '')
+                    .replace(/&nbsp;/g, ' ')
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&#39;/g, "'")
+                    .replace(/&quot;/g, '"')
+                    .trim();
+                return { text, link: linkUrl };
+            });
+            rows.push(row);
+        }
+    }
+    
+    if (rows.length <= 1) return []; // Header only or empty
+    
+    // Skip header row (index 0) and map to standardized fields:
+    // Columns: [0: Date, 1: Category, 2: Title, 3: Details, 4: Link, 5: Status]
+    const results = [];
+    for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        if (!r || r.length < 3) continue;
+        
+        let date = r[0]?.text || '';
+        let tag = r[1]?.text || 'Alert';
+        let title = r[2]?.text || '';
+        let details = '';
+        let link = '';
+        let status = '';
+
+        if (r.length >= 6) {
+            details = r[3]?.text || '';
+            link = r[4]?.link || r[4]?.text || '';
+            status = (r[5]?.text || '').toLowerCase().trim();
+        } else if (r.length === 5) {
+            const col4Status = (r[4]?.text || '').toLowerCase().trim();
+            if (col4Status === 'active' || col4Status === 'inactive') {
+                link = r[3]?.link || r[3]?.text || '';
+                status = col4Status;
+            } else {
+                details = r[3]?.text || '';
+                status = (r[4]?.text || '').toLowerCase().trim();
+            }
+        } else {
+            status = (r[r.length - 1]?.text || '').toLowerCase().trim();
+        }
+
+        if (title.trim().length > 0 && status !== 'inactive') {
+            results.push({
+                date: date.trim() || 'Recent',
+                tag: tag.trim() || 'Alert',
+                title: title.trim(),
+                details: details.trim(),
+                link: link.trim()
+            });
+        }
+    }
+    return results;
+}
+
+// Fallback CSV parser
 function parseCSV(text) {
     const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
-    if (lines.length <= 1) return []; // Only header or empty
+    if (lines.length <= 1) return [];
     
     const results = [];
-    // Skip header row
     for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
         const row = [];
@@ -482,10 +561,15 @@ function openNoticeModal(noticeIndex) {
 
     // Format paragraphs from details or title
     const rawDetails = notice.details && notice.details.trim().length > 0 ? notice.details : notice.title;
-    // Split on multiple newlines or linebreaks
     const paragraphs = rawDetails.split(/\r?\n+/).filter(p => p.trim().length > 0);
     
-    noticeModalBody.innerHTML = paragraphs.map(p => `<p>${p.trim()}</p>`).join('');
+    noticeModalBody.innerHTML = paragraphs.map(p => {
+        // Detect bullet points or headers
+        if (p.startsWith('- ') || p.startsWith('• ')) {
+            return `<li class="ml-4 list-disc">${p.replace(/^[-•]\s*/, '')}</li>`;
+        }
+        return `<p>${p.trim()}</p>`;
+    }).join('');
 
     // Render optional link button
     if (notice.link && notice.link.trim().length > 0) {
@@ -531,56 +615,43 @@ async function loadNoticeBoard() {
     if (!feed) return;
 
     try {
-        const response = await fetch(GOOGLE_SHEET_CSV_URL);
-        if (!response.ok) throw new Error("Failed to fetch sheet");
-        
-        const csvText = await response.text();
-        const rows = parseCSV(csvText);
-        
-        // Flexible parsing handling 5-col or 6-col structure:
-        // 6-col: [Date, Category, Title, Details, Link, Status]
-        // 5-col: [Date, Category, Title, Link, Status]
+        const cacheBuster = `&_t=${Date.now()}`;
         activeNoticesData = [];
 
-        rows.forEach(row => {
-            if (!row || row.length < 3) return;
-            
-            let date = row[0] || '';
-            let tag = row[1] || 'Alert';
-            let title = row[2] || '';
-            let details = '';
-            let link = '';
-            let status = '';
+        // Primary: Fetch published HTML endpoint (always current and supports rich multi-paragraph cells)
+        let response = await fetch(`${GOOGLE_SHEET_HTML_URL}${cacheBuster}`);
+        if (response.ok) {
+            const htmlText = await response.text();
+            activeNoticesData = parseSheetHTML(htmlText);
+        }
 
-            if (row.length >= 6) {
-                details = row[3] || '';
-                link = row[4] || '';
-                status = (row[5] || '').toLowerCase().trim();
-            } else if (row.length === 5) {
-                // If 5th column looks like status ('active'/'inactive')
-                const col4Lower = (row[4] || '').toLowerCase().trim();
-                if (col4Lower === 'active' || col4Lower === 'inactive') {
-                    link = row[3] || '';
-                    status = col4Lower;
-                } else {
-                    details = row[3] || '';
-                    status = (row[4] || '').toLowerCase().trim();
-                }
-            } else {
-                status = (row[row.length - 1] || '').toLowerCase().trim();
-            }
+        // Secondary fallback to CSV if HTML returned no rows
+        if (activeNoticesData.length === 0) {
+            const csvResponse = await fetch(`${GOOGLE_SHEET_CSV_URL}${cacheBuster}`);
+            if (csvResponse.ok) {
+                const csvText = await csvResponse.text();
+                const csvRows = parseCSV(csvText);
+                csvRows.forEach(row => {
+                    if (!row || row.length < 3) return;
+                    let date = row[0] || '';
+                    let tag = row[1] || 'Alert';
+                    let title = row[2] || '';
+                    let details = row.length >= 6 ? (row[3] || '') : '';
+                    let link = row.length >= 6 ? (row[4] || '') : (row[3] || '');
+                    let status = (row[row.length - 1] || '').toLowerCase().trim();
 
-            // Exclude rows where title is empty or marked inactive
-            if (title.trim().length > 0 && status !== 'inactive') {
-                activeNoticesData.push({
-                    date: date.trim() || 'Recent',
-                    tag: tag.trim() || 'Alert',
-                    title: title.trim(),
-                    details: details.trim(),
-                    link: link.trim()
+                    if (title.trim().length > 0 && status !== 'inactive') {
+                        activeNoticesData.push({
+                            date: date.trim() || 'Recent',
+                            tag: tag.trim() || 'Alert',
+                            title: title.trim(),
+                            details: details.trim(),
+                            link: link.trim()
+                        });
+                    }
                 });
             }
-        });
+        }
 
         if (activeNoticesData.length === 0) {
             feed.innerHTML = `
