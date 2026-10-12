@@ -440,6 +440,89 @@ function parseCSV(text) {
     return results;
 }
 
+// Global store for active notices
+let activeNoticesData = [];
+
+// Notice Modal Elements
+const noticeModal = document.getElementById('notice-modal');
+const noticeModalOverlay = document.getElementById('notice-modal-overlay');
+const noticeModalContent = document.getElementById('notice-modal-content');
+const closeNoticeModalBtn = document.getElementById('close-notice-modal-btn');
+const noticeModalCloseAction = document.getElementById('notice-modal-close-action');
+const noticeModalTag = document.getElementById('notice-modal-tag');
+const noticeModalDate = document.getElementById('notice-modal-date');
+const noticeModalTitle = document.getElementById('notice-modal-title');
+const noticeModalBody = document.getElementById('notice-modal-body');
+const noticeModalLinkContainer = document.getElementById('notice-modal-link-container');
+
+function openNoticeModal(noticeIndex) {
+    const notice = activeNoticesData[noticeIndex];
+    if (!notice || !noticeModal) return;
+
+    noticeModalTag.textContent = notice.tag || 'Announcement';
+    noticeModalDate.textContent = notice.date || '';
+    noticeModalTitle.textContent = notice.title || '';
+
+    // Color badge matching category
+    const tagLower = (notice.tag || '').toLowerCase();
+    let badgeBg = "bg-emerald-100 text-emerald-800 border-emerald-200";
+    if (tagLower.includes('cuet')) {
+        badgeBg = "bg-amber-100 text-amber-900 border-amber-200";
+    } else if (tagLower.includes('ugc') || tagLower.includes('net')) {
+        badgeBg = "bg-blue-100 text-blue-900 border-blue-200";
+    } else if (tagLower.includes('gate')) {
+        badgeBg = "bg-purple-100 text-purple-900 border-purple-200";
+    } else if (tagLower.includes('urgent') || tagLower.includes('important')) {
+        badgeBg = "bg-red-100 text-red-800 border-red-200";
+    }
+    noticeModalTag.className = `inline-block px-3 py-1 rounded-full text-xs font-bold border ${badgeBg}`;
+
+    // Format paragraphs from details or title
+    const rawDetails = notice.details && notice.details.trim().length > 0 ? notice.details : notice.title;
+    // Split on multiple newlines or linebreaks
+    const paragraphs = rawDetails.split(/\r?\n+/).filter(p => p.trim().length > 0);
+    
+    noticeModalBody.innerHTML = paragraphs.map(p => `<p>${p.trim()}</p>`).join('');
+
+    // Render optional link button
+    if (notice.link && notice.link.trim().length > 0) {
+        const isExternal = notice.link.startsWith('http');
+        const targetAttr = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
+        noticeModalLinkContainer.innerHTML = `
+            <a href="${notice.link}" ${targetAttr} class="btn-primary px-5 py-2 text-xs sm:text-sm font-bold inline-flex items-center gap-1.5 shadow-md">
+                <span>Visit Official Link / Circular</span>
+                <i data-lucide="external-link" class="w-4 h-4"></i>
+            </a>
+        `;
+    } else {
+        noticeModalLinkContainer.innerHTML = '';
+    }
+
+    noticeModal.classList.remove('hidden');
+    setTimeout(() => {
+        noticeModal.classList.remove('opacity-0');
+        noticeModalContent.classList.remove('scale-95');
+        noticeModalContent.classList.add('scale-100');
+    }, 10);
+    lenis.stop();
+    lucide.createIcons();
+}
+
+function closeNoticeModal() {
+    if (!noticeModal) return;
+    noticeModal.classList.add('opacity-0');
+    noticeModalContent.classList.remove('scale-100');
+    noticeModalContent.classList.add('scale-95');
+    setTimeout(() => {
+        noticeModal.classList.add('hidden');
+    }, 300);
+    lenis.start();
+}
+
+if (closeNoticeModalBtn) closeNoticeModalBtn.addEventListener('click', closeNoticeModal);
+if (noticeModalOverlay) noticeModalOverlay.addEventListener('click', closeNoticeModal);
+if (noticeModalCloseAction) noticeModalCloseAction.addEventListener('click', closeNoticeModal);
+
 async function loadNoticeBoard() {
     const feed = document.getElementById('notice-board-feed');
     if (!feed) return;
@@ -451,15 +534,52 @@ async function loadNoticeBoard() {
         const csvText = await response.text();
         const rows = parseCSV(csvText);
         
-        // Filter active rows: [Date, Category, Title, Link, Status]
-        const activeNotices = rows.filter(row => {
-            const status = (row[4] || '').toLowerCase().trim();
-            const title = (row[2] || '').trim();
-            // Show if title exists and status is either 'active', blank, or not explicitly 'inactive'
-            return title && status !== 'inactive';
+        // Flexible parsing handling 5-col or 6-col structure:
+        // 6-col: [Date, Category, Title, Details, Link, Status]
+        // 5-col: [Date, Category, Title, Link, Status]
+        activeNoticesData = [];
+
+        rows.forEach(row => {
+            if (!row || row.length < 3) return;
+            
+            let date = row[0] || '';
+            let tag = row[1] || 'Alert';
+            let title = row[2] || '';
+            let details = '';
+            let link = '';
+            let status = '';
+
+            if (row.length >= 6) {
+                details = row[3] || '';
+                link = row[4] || '';
+                status = (row[5] || '').toLowerCase().trim();
+            } else if (row.length === 5) {
+                // If 5th column looks like status ('active'/'inactive')
+                const col4Lower = (row[4] || '').toLowerCase().trim();
+                if (col4Lower === 'active' || col4Lower === 'inactive') {
+                    link = row[3] || '';
+                    status = col4Lower;
+                } else {
+                    details = row[3] || '';
+                    status = (row[4] || '').toLowerCase().trim();
+                }
+            } else {
+                status = (row[row.length - 1] || '').toLowerCase().trim();
+            }
+
+            // Exclude rows where title is empty or marked inactive
+            if (title.trim().length > 0 && status !== 'inactive') {
+                activeNoticesData.push({
+                    date: date.trim() || 'Recent',
+                    tag: tag.trim() || 'Alert',
+                    title: title.trim(),
+                    details: details.trim(),
+                    link: link.trim()
+                });
+            }
         });
 
-        if (activeNotices.length === 0) {
+        if (activeNoticesData.length === 0) {
             feed.innerHTML = `
                 <div class="text-center py-8 text-stone-500">
                     <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
@@ -473,18 +593,9 @@ async function loadNoticeBoard() {
             return;
         }
 
-        // Render notices (latest first if user added rows sequentially)
-        feed.innerHTML = activeNotices.map((row) => {
-            const date = row[0] || 'Recent';
-            const tag = row[1] || 'Alert';
-            const title = row[2] || '';
-            const link = (row[3] || '').trim();
-
-            const isExternal = link.startsWith('http');
-            const targetAttr = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
-
-            // Color badge matching category
-            const tagLower = tag.toLowerCase();
+        // Render notices with single-line title and Read More button
+        feed.innerHTML = activeNoticesData.map((notice, index) => {
+            const tagLower = notice.tag.toLowerCase();
             let badgeBg = "bg-emerald-100 text-emerald-800 border-emerald-200/80";
             if (tagLower.includes('cuet')) {
                 badgeBg = "bg-amber-100 text-amber-900 border-amber-200/80";
@@ -497,26 +608,30 @@ async function loadNoticeBoard() {
             }
 
             return `
-                <div class="p-3.5 rounded-xl bg-white/70 hover:bg-white border border-stone-200/70 hover:border-emerald-300 transition-all duration-200 shadow-sm hover:shadow group">
+                <div class="p-3.5 rounded-xl bg-white/75 hover:bg-white border border-stone-200/70 hover:border-emerald-300 transition-all duration-200 shadow-sm hover:shadow group">
                     <div class="flex items-center justify-between gap-2 mb-1.5">
                         <span class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badgeBg}">
-                            ${tag}
+                            ${notice.tag}
                         </span>
-                        <span class="text-[11px] text-stone-400 font-medium flex items-center gap-1">
-                            ${date}
+                        <span class="text-[11px] text-stone-400 font-medium">
+                            ${notice.date}
                         </span>
                     </div>
-                    <p class="text-xs sm:text-sm font-semibold text-stone-800 leading-snug group-hover:text-emerald-900 transition-colors">
-                        ${title}
+                    <!-- Single-line truncated title -->
+                    <p class="text-xs sm:text-sm font-semibold text-stone-800 leading-snug truncate group-hover:text-emerald-900 transition-colors" title="${notice.title}">
+                        ${notice.title}
                     </p>
-                    ${link ? `
-                        <div class="mt-2 pt-1.5 border-t border-stone-100 flex items-center justify-end">
-                            <a href="${link}" ${targetAttr} class="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-800 transition-colors">
-                                <span>View Details</span>
-                                <i data-lucide="external-link" class="w-3 h-3"></i>
+                    <div class="mt-2.5 pt-1.5 border-t border-stone-100 flex items-center justify-between">
+                        <button onclick="openNoticeModal(${index})" class="inline-flex items-center gap-1 text-xs font-bold text-emerald-700 hover:text-emerald-900 hover:underline transition-colors">
+                            <span>Read Full Announcement</span>
+                            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                        </button>
+                        ${notice.link ? `
+                            <a href="${notice.link}" target="_blank" rel="noopener noreferrer" class="text-stone-400 hover:text-emerald-600 transition-colors p-1" title="Direct link">
+                                <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
                             </a>
-                        </div>
-                    ` : ''}
+                        ` : ''}
+                    </div>
                 </div>
             `;
         }).join('');
@@ -534,5 +649,12 @@ async function loadNoticeBoard() {
     }
 }
 
+// Make openNoticeModal available globally for inline onclick
+window.openNoticeModal = openNoticeModal;
+
 // Initial fetch on page load
 loadNoticeBoard();
+
+// Auto-refresh notices in the background every 2 minutes
+setInterval(loadNoticeBoard, 120000);
+
