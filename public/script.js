@@ -332,3 +332,133 @@ ${data.message || 'No message provided'}`;
 
 document.getElementById('contact-form').addEventListener('submit', (e) => handleFormSubmit(e, 'contact-status'));
 document.getElementById('download-form').addEventListener('submit', (e) => handleFormSubmit(e, 'download-status'));
+
+// --- 7. Live Notice Board (Google Sheets Integration) ---
+const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSUVtdgTR8osX_h2Ph_0_3rmmPn6VJKT360pkj1IOn1tOKHMBPwGc_p_PaKZVIxFsaBy6GSmUGC7tg9/pub?gid=0&single=true&output=csv";
+
+// Helper to parse standard CSV line taking into account quotes
+function parseCSV(text) {
+    const lines = text.split(/\r?\n/).filter(line => line.trim().length > 0);
+    if (lines.length <= 1) return []; // Only header or empty
+    
+    const results = [];
+    // Skip header row
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        const row = [];
+        let inQuotes = false;
+        let token = "";
+        
+        for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"' && (j === 0 || line[j-1] !== '\\')) {
+                inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+                row.push(token.trim().replace(/^"|"$/g, ''));
+                token = "";
+            } else {
+                token += char;
+            }
+        }
+        row.push(token.trim().replace(/^"|"$/g, ''));
+        results.push(row);
+    }
+    return results;
+}
+
+async function loadNoticeBoard() {
+    const feed = document.getElementById('notice-board-feed');
+    if (!feed) return;
+
+    try {
+        const response = await fetch(GOOGLE_SHEET_CSV_URL);
+        if (!response.ok) throw new Error("Failed to fetch sheet");
+        
+        const csvText = await response.text();
+        const rows = parseCSV(csvText);
+        
+        // Filter active rows: [Date, Category, Title, Link, Status]
+        const activeNotices = rows.filter(row => {
+            const status = (row[4] || '').toLowerCase().trim();
+            const title = (row[2] || '').trim();
+            // Show if title exists and status is either 'active', blank, or not explicitly 'inactive'
+            return title && status !== 'inactive';
+        });
+
+        if (activeNotices.length === 0) {
+            feed.innerHTML = `
+                <div class="text-center py-8 text-stone-500">
+                    <div class="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-2">
+                        <i data-lucide="check-circle" class="w-5 h-5"></i>
+                    </div>
+                    <p class="text-sm font-semibold text-stone-700">All caught up!</p>
+                    <p class="text-xs text-stone-400 mt-0.5">No new exam alerts at this moment.</p>
+                </div>
+            `;
+            lucide.createIcons();
+            return;
+        }
+
+        // Render notices (latest first if user added rows sequentially)
+        feed.innerHTML = activeNotices.map((row) => {
+            const date = row[0] || 'Recent';
+            const tag = row[1] || 'Alert';
+            const title = row[2] || '';
+            const link = (row[3] || '').trim();
+
+            const isExternal = link.startsWith('http');
+            const targetAttr = isExternal ? 'target="_blank" rel="noopener noreferrer"' : '';
+
+            // Color badge matching category
+            const tagLower = tag.toLowerCase();
+            let badgeBg = "bg-emerald-100 text-emerald-800 border-emerald-200/80";
+            if (tagLower.includes('cuet')) {
+                badgeBg = "bg-amber-100 text-amber-900 border-amber-200/80";
+            } else if (tagLower.includes('ugc') || tagLower.includes('net')) {
+                badgeBg = "bg-blue-100 text-blue-900 border-blue-200/80";
+            } else if (tagLower.includes('gate')) {
+                badgeBg = "bg-purple-100 text-purple-900 border-purple-200/80";
+            } else if (tagLower.includes('urgent') || tagLower.includes('important')) {
+                badgeBg = "bg-red-100 text-red-800 border-red-200/80";
+            }
+
+            return `
+                <div class="p-3.5 rounded-xl bg-white/70 hover:bg-white border border-stone-200/70 hover:border-emerald-300 transition-all duration-200 shadow-sm hover:shadow group">
+                    <div class="flex items-center justify-between gap-2 mb-1.5">
+                        <span class="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${badgeBg}">
+                            ${tag}
+                        </span>
+                        <span class="text-[11px] text-stone-400 font-medium flex items-center gap-1">
+                            ${date}
+                        </span>
+                    </div>
+                    <p class="text-xs sm:text-sm font-semibold text-stone-800 leading-snug group-hover:text-emerald-900 transition-colors">
+                        ${title}
+                    </p>
+                    ${link ? `
+                        <div class="mt-2 pt-1.5 border-t border-stone-100 flex items-center justify-end">
+                            <a href="${link}" ${targetAttr} class="inline-flex items-center gap-1 text-xs font-bold text-emerald-600 hover:text-emerald-800 transition-colors">
+                                <span>View Details</span>
+                                <i data-lucide="external-link" class="w-3 h-3"></i>
+                            </a>
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+        }).join('');
+
+        lucide.createIcons();
+    } catch (err) {
+        console.error("Notice board error:", err);
+        feed.innerHTML = `
+            <div class="p-4 rounded-xl bg-stone-50 border border-stone-200 text-xs text-stone-600 text-center">
+                <i data-lucide="info" class="w-4 h-4 mx-auto mb-1 text-stone-400"></i>
+                <p>Unable to load notices right now. Please refresh or check back shortly.</p>
+            </div>
+        `;
+        lucide.createIcons();
+    }
+}
+
+// Initial fetch on page load
+loadNoticeBoard();
