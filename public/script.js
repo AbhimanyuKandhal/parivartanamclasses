@@ -162,12 +162,13 @@ gsap.utils.toArray('.gs_reveal_up').forEach(elem => {
     gsap.from(elem, {
         scrollTrigger: {
             trigger: elem,
-            start: "top 95%",
-            toggleActions: "play none none reverse"
+            start: "top 90%",
+            toggleActions: "play none none none",
+            once: true
         },
         y: 40,
         opacity: 0,
-        duration: 0.5,
+        duration: 0.6,
         ease: "power3.out"
     });
 });
@@ -179,12 +180,13 @@ gsap.utils.toArray('.stagger-grid').forEach(grid => {
         gsap.from(cards, {
             scrollTrigger: {
                 trigger: grid,
-                start: "top 95%",
-                toggleActions: "play none none reverse"
+                start: "top 90%",
+                toggleActions: "play none none none",
+                once: true
             },
             y: 40,
             opacity: 0,
-            duration: 0.5,
+            duration: 0.6,
             ease: "power3.out",
             stagger: 0.1
         });
@@ -196,7 +198,8 @@ gsap.utils.toArray('.gs_reveal_left').forEach(elem => {
         scrollTrigger: {
             trigger: elem,
             start: "top 85%",
-            toggleActions: "play none none reverse"
+            toggleActions: "play none none none",
+            once: true
         },
         x: -40,
         opacity: 0,
@@ -213,7 +216,8 @@ gsap.utils.toArray('.gs_reveal_right').forEach(elem => {
         scrollTrigger: {
             trigger: elem,
             start: "top 85%",
-            toggleActions: "play none none reverse"
+            toggleActions: "play none none none",
+            once: true
         },
         x: 40,
         opacity: 0,
@@ -227,13 +231,19 @@ gsap.utils.toArray('.gs_reveal').forEach(elem => {
         scrollTrigger: {
             trigger: elem,
             start: "top 85%",
-            toggleActions: "play none none reverse"
+            toggleActions: "play none none none",
+            once: true
         },
         opacity: 0,
         scale: 0.98,
         duration: 0.8,
         ease: "power2.out"
     });
+});
+
+// Refresh ScrollTrigger after window load to account for images
+window.addEventListener('load', () => {
+    ScrollTrigger.refresh();
 });
 
 // --- 5. Modal Logic ---
