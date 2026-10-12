@@ -247,14 +247,34 @@ window.addEventListener('load', () => {
 });
 
 // --- 5. Modal Logic ---
+// --- 5. Modal Logic ---
 const modal = document.getElementById('lead-modal');
 const modalOverlay = document.getElementById('modal-overlay');
 const modalContent = document.getElementById('modal-content');
 const closeBtn = document.getElementById('close-modal-btn');
 const heroDownloadBtn = document.getElementById('hero-download-btn');
 const resourceDlBtns = document.querySelectorAll('.resource-dl-btn');
+const courseDlBtns = document.querySelectorAll('.course-download-btn');
+const targetPdfInput = document.getElementById('download-target-pdf');
+const downloadExamSelect = document.querySelector('#download-form select[name="exam"]');
 
-function openModal() {
+// Map of default PDFs for each exam
+const EXAM_PDF_MAP = {
+    'CUET UG': '/Syllabus/CUET%20UG%20Syllabus.pdf',
+    'CUET PG': '/Syllabus/CUET%20PG%20Syllabus.pdf',
+    'UGC NET': '/Syllabus/UGC%20NET%20Paper%202.pdf',
+    'GATE': '/Syllabus/Gate%20psychology%20syllabus.pdf',
+    'M.Clinical Psychology': '/Syllabus/CUET%20PG%20Syllabus.pdf'
+};
+
+function openModal(examName = '', pdfUrl = '') {
+    if (downloadExamSelect && examName) {
+        downloadExamSelect.value = examName;
+    }
+    if (targetPdfInput) {
+        targetPdfInput.value = pdfUrl || (examName ? EXAM_PDF_MAP[examName] : '');
+    }
+
     modal.classList.remove('hidden');
     // slight delay to allow display:block to apply before animating opacity
     setTimeout(() => {
@@ -275,8 +295,28 @@ function closeModal() {
     lenis.start();
 }
 
-heroDownloadBtn.addEventListener('click', openModal);
-resourceDlBtns.forEach(btn => btn.addEventListener('click', openModal));
+if (heroDownloadBtn) {
+    heroDownloadBtn.addEventListener('click', () => openModal());
+}
+
+resourceDlBtns.forEach((btn, index) => {
+    btn.addEventListener('click', () => {
+        // Map resource cards to their respective syllabus or default
+        const examKeys = ['CUET UG', 'CUET PG', 'UGC NET', 'GATE', 'M.Clinical Psychology'];
+        const exam = examKeys[index] || '';
+        openModal(exam, EXAM_PDF_MAP[exam]);
+    });
+});
+
+courseDlBtns.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const exam = btn.getAttribute('data-exam') || '';
+        const pdf = btn.getAttribute('data-pdf') || EXAM_PDF_MAP[exam] || '';
+        openModal(exam, pdf);
+    });
+});
+
 closeBtn.addEventListener('click', closeModal);
 modalOverlay.addEventListener('click', closeModal);
 
@@ -289,7 +329,7 @@ async function handleFormSubmit(e, statusElementId) {
     // UI Feedback
     const submitBtn = form.querySelector('button[type="submit"]');
     const originalText = submitBtn.innerHTML;
-    submitBtn.innerHTML = 'Sending... <i data-lucide="loader-2" class="animate-spin w-5 h-5 inline-block"></i>';
+    submitBtn.innerHTML = 'Unlocking... <i data-lucide="loader-2" class="animate-spin w-5 h-5 inline-block"></i>';
     submitBtn.disabled = true;
     lucide.createIcons(); // refresh icons
 
@@ -304,21 +344,37 @@ Phone: ${data.phone}
 Exam: ${data.exam}
 
 Message:
-${data.message || 'No message provided'}`;
+${data.message || 'Syllabus download request'}`;
 
         // Trigger native mail client
         window.location.href = `mailto:parivartanamclasses@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-        statusEl.textContent = "Opening your email client...";
+        statusEl.textContent = "Unlocking download...";
         statusEl.className = "text-sm text-center font-bold mt-2 text-emerald-600 block";
-        form.reset();
         
-        // If it's the download form, simulate download after a delay
+        // If it's the download form, trigger download of the target PDF
         if (data.formType === 'Syllabus Download') {
+            const pdfToDownload = data.targetPdf || EXAM_PDF_MAP[data.exam] || '/Syllabus/CUET%20UG%20Syllabus.pdf';
+            
             setTimeout(() => {
-                alert("Downloading Syllabus...");
-                closeModal();
-            }, 1500);
+                // Programmatically trigger PDF download
+                const downloadLink = document.createElement('a');
+                downloadLink.href = pdfToDownload;
+                downloadLink.download = decodeURIComponent(pdfToDownload.split('/').pop());
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+
+                statusEl.textContent = "Your download has started!";
+                statusEl.className = "text-sm text-center font-bold mt-2 text-emerald-600 block";
+                
+                setTimeout(() => {
+                    form.reset();
+                    closeModal();
+                }, 1200);
+            }, 1000);
+        } else {
+            form.reset();
         }
     } catch (error) {
         statusEl.textContent = "An error occurred. Please try again.";
