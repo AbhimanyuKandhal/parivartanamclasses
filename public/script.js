@@ -17,6 +17,9 @@ const lenis = new Lenis({
     smooth: true,
     mouseMultiplier: 1,
     smoothTouch: false,
+    prevent: (node) => {
+        return !!node.closest('#notice-board-feed, #notice-modal-body, [data-lenis-prevent]');
+    }
 });
 
 // Force Lenis to start at top
@@ -655,6 +658,21 @@ window.openNoticeModal = openNoticeModal;
 // Initial fetch on page load
 loadNoticeBoard();
 
+// Ensure trackpad/mousewheel scroll gesture directly scrolls the notice board
+const noticeFeedEl = document.getElementById('notice-board-feed');
+if (noticeFeedEl) {
+    noticeFeedEl.addEventListener('wheel', (e) => {
+        // If content is taller than container, scroll within the feed
+        if (noticeFeedEl.scrollHeight > noticeFeedEl.clientHeight) {
+            const atTop = noticeFeedEl.scrollTop === 0 && e.deltaY < 0;
+            const atBottom = Math.abs(noticeFeedEl.scrollHeight - noticeFeedEl.clientHeight - noticeFeedEl.scrollTop) < 1 && e.deltaY > 0;
+            
+            if (!atTop && !atBottom) {
+                e.stopPropagation();
+            }
+        }
+    }, { passive: false });
+}
+
 // Auto-refresh notices in the background every 2 minutes
 setInterval(loadNoticeBoard, 120000);
-
