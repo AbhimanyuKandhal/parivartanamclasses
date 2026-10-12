@@ -691,8 +691,8 @@ async function loadNoticeBoard() {
                             ${notice.date}
                         </span>
                     </div>
-                    <!-- Single-line truncated title -->
-                    <p class="text-xs sm:text-sm font-semibold text-stone-800 leading-snug truncate group-hover:text-emerald-900 transition-colors" title="${notice.title}">
+                    <!-- Full Notice Title -->
+                    <p class="text-xs sm:text-sm font-semibold text-stone-800 leading-snug group-hover:text-emerald-900 transition-colors">
                         ${notice.title}
                     </p>
                     <div class="mt-2.5 pt-1.5 border-t border-stone-100 flex items-center justify-between">
