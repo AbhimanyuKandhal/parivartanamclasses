@@ -320,6 +320,9 @@ courseDlBtns.forEach(btn => {
 closeBtn.addEventListener('click', closeModal);
 modalOverlay.addEventListener('click', closeModal);
 
+// Google Apps Script Webhook for automatic lead capture
+const GOOGLE_LEADS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzoeAJPBKe1tPcen3IBcavltjqmOEcpm-GjHjtf18HKZacbxlXHKM3wK-iT6haGxRmL/exec";
+
 // --- 6. Form Submission Logic ---
 async function handleFormSubmit(e, statusElementId) {
     e.preventDefault();
@@ -337,23 +340,38 @@ async function handleFormSubmit(e, statusElementId) {
     const data = Object.fromEntries(formData.entries());
 
     try {
-        // Construct the email body
-        const subject = `Website Inquiry: ${data.exam || 'General'}`;
-        const body = `Name: ${data.name}
-Phone: ${data.phone}
-Exam: ${data.exam}
+        // Silently send details to Google Sheet in background
+        fetch(GOOGLE_LEADS_WEBHOOK_URL, {
+            method: 'POST',
+            mode: 'no-cors', // standard cross-origin for Google Apps Script Web Apps
+            headers: {
+                'Content-Type': 'text/plain;charset=utf-8'
+            },
+            body: JSON.stringify({
+                name: data.name || '',
+                phone: data.phone || '',
+                exam: data.exam || '',
+                message: data.message || '',
+                formType: data.formType || 'Inquiry'
+            })
+        }).catch(err => console.warn('Background lead capture note:', err));
 
-Message:
-${data.message || 'Syllabus download request'}`;
+        // If it's the contact form, open native mail client as backup
+        if (data.formType === 'Contact Form') {
+            const subject = `Website Inquiry: ${data.exam || 'General'}`;
+            const body = `Name: ${data.name}\nPhone: ${data.phone}\nExam: ${data.exam}\n\nMessage:\n${data.message || 'No message provided'}`;
+            window.location.href = `mailto:parivartanamclasses@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-        // Trigger native mail client
-        window.location.href = `mailto:parivartanamclasses@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            statusEl.textContent = "Thank you! We have received your inquiry.";
+            statusEl.className = "text-sm text-center font-bold mt-2 text-emerald-600 block";
+            form.reset();
+        }
 
-        statusEl.textContent = "Unlocking download...";
-        statusEl.className = "text-sm text-center font-bold mt-2 text-emerald-600 block";
-        
-        // If it's the download form, trigger download of the target PDF
+        // If it's the download form, trigger download of the target PDF immediately without opening mail app
         if (data.formType === 'Syllabus Download') {
+            statusEl.textContent = "Details verified! Preparing your syllabus...";
+            statusEl.className = "text-sm text-center font-bold mt-2 text-emerald-600 block";
+
             const pdfToDownload = data.targetPdf || EXAM_PDF_MAP[data.exam] || '/Syllabus/CUET%20UG%20Syllabus.pdf';
             
             setTimeout(() => {
@@ -371,18 +389,18 @@ ${data.message || 'Syllabus download request'}`;
                 setTimeout(() => {
                     form.reset();
                     closeModal();
-                }, 1200);
-            }, 1000);
-        } else {
-            form.reset();
+                }, 1000);
+            }, 600);
         }
     } catch (error) {
         statusEl.textContent = "An error occurred. Please try again.";
         statusEl.className = "text-sm text-center font-bold mt-2 text-red-600 block";
     } finally {
-        submitBtn.innerHTML = originalText;
-        submitBtn.disabled = false;
-        lucide.createIcons(); // refresh icons
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+            lucide.createIcons(); // refresh icons
+        }, 1200);
     }
 }
 
